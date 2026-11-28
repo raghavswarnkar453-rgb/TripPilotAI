@@ -12,6 +12,7 @@ class HealthResponse(BaseModel):
     version: str
     supabase_configured: bool
     gemini_configured: bool
+    groq_configured: bool
     weather_configured: bool
 
 
@@ -25,5 +26,6 @@ def health() -> HealthResponse:
         version=s.app_version,
         supabase_configured=bool(s.supabase_url and s.supabase_anon_key),
         gemini_configured=bool(s.gemini_api_key and s.gemini_model),
-        weather_configured=bool(s.openweather_api_key),
+        groq_configured=bool(s.groq_api_key and s.groq_model),
+        weather_configured=True,  # Open-Meteo is keyless
     )

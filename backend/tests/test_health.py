@@ -12,7 +12,7 @@ def test_health_ok():
     assert body["status"] == "ok"
     assert set(body) == {
         "status", "service", "version",
-        "supabase_configured", "gemini_configured", "weather_configured",
+        "supabase_configured", "gemini_configured", "groq_configured", "weather_configured",
     }
 
 

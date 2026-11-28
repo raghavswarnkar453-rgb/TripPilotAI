@@ -1,0 +1,192 @@
+{
+  "name": "WF-01 - Trip Request Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trippilot/trip-request",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "1f3cc672-7ebe-429b-9f3f-376b4d0e31f8",
+      "name": "Webhook",
+      "webhookId": "3edfacbb-0147-41e7-8562-42e745d9725b"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validation (from the original WF-01) + builds the request body the FastAPI backend expects.\nconst body = $input.first().json.body ?? $input.first().json;\n\nconst destination = String(body.destination ?? \"\").trim();\nconst startDate = body.startDate ?? body.start_date;\nconst endDate = body.endDate ?? body.end_date;\nconst budget = Number(body.budget);\nconst travelers = Number(body.travelers ?? 1);\nconst interests = Array.isArray(body.interests) ? body.interests : [];\nconst origin = body.origin ? String(body.origin).trim() : null;\nconst travelStyle = body.travelStyle ?? body.travel_style ?? \"balanced\";\n\nconst errors = [];\n\nif (!destination) {\n  errors.push(\"Destination is required\");\n}\n\nif (!startDate || !endDate) {\n  errors.push(\"Start date and end date are required\");\n} else {\n  const start = new Date(startDate);\n  const end = new Date(endDate);\n\n  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {\n    errors.push(\"Invalid travel dates\");\n  } else if (end < start) {\n    errors.push(\"End date must be on or after the start date\");\n  }\n}\n\nif (!Number.isFinite(budget) || budget <= 0) {\n  errors.push(\"Budget must be greater than zero\");\n}\n\nif (!Number.isInteger(travelers) || travelers < 1 || travelers > 50) {\n  errors.push(\"Travelers must be between 1 and 50\");\n}\n\nif (errors.length > 0) {\n  return [{ json: { success: false, statusCode: 400, errors } }];\n}\n\nreturn [{\n  json: {\n    success: true,\n    statusCode: 200,\n    tripRequest: { destination, startDate, endDate, budget, currency: \"INR\", travelers, interests },\n    // Body for POST /api/trips/generate (the backend re-validates everything).\n    payload: {\n      destination,\n      origin,\n      start_date: startDate,\n      end_date: endDate,\n      budget,\n      travelers,\n      interests,\n      travel_style: travelStyle,\n    },\n    message: \"Trip request validated successfully\",\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "bdfa3b87-c171-43b9-afb4-dde2da613586",
+      "name": "Validate Trip Request"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0a80101-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "c0a80101-0000-4000-8000-000000000002",
+      "name": "Valid?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode || 400 }}"
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        704,
+        160
+      ],
+      "id": "d30c49e3-a5c0-489d-93b1-1e64d7d54441",
+      "name": "Respond - validation error"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/api/trips/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        704,
+        -120
+      ],
+      "onError": "continueRegularOutput",
+      "id": "c0a80101-0000-4000-8000-000000000003",
+      "name": "Generate trip (FastAPI)"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.body ?? { detail: 'The TripPilot backend could not be reached. Is FastAPI running on port 8000?' } }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode ?? 502 }}"
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        960,
+        -120
+      ],
+      "id": "c0a80101-0000-4000-8000-000000000004",
+      "name": "Respond with itinerary"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Trip Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Trip Request": {
+      "main": [
+        [
+          {
+            "node": "Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid?": {
+      "main": [
+        [
+          {
+            "node": "Generate trip (FastAPI)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - validation error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate trip (FastAPI)": {
+      "main": [
+        [
+          {
+            "node": "Respond with itinerary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}

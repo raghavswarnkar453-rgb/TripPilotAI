@@ -1,0 +1,74 @@
+{
+  "name": "WF-02 - Trip Events",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trippilot/trip-events",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "b2000000-0000-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "trippilot-trip-events"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turns a backend event into a readable summary. Add Gmail / Telegram / Google Sheets after this node.\nconst body = $input.first().json.body ?? $input.first().json;\nconst d = body.data ?? {};\nconst inr = (n) => 'INR ' + Math.round(Number(n) || 0).toLocaleString('en-IN');\nconst label = body.event === 'trip_saved' ? 'Trip saved' : 'Trip generated';\nreturn [{ json: {\n  event: body.event,\n  sent_at: body.sent_at,\n  headline: `${label}: ${d.destination} (${d.start_date} to ${d.end_date}), ${d.travelers} traveller(s)`,\n  budget: inr(d.budget),\n  estimated_total: inr(d.estimated_total),\n  over_budget: !!d.over_budget,\n  model: d.model,\n  trip_id: d.trip_id ?? null,\n}}];\n"
+      },
+      "id": "b2000000-0000-4000-8000-000000000002",
+      "name": "Summarize event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b2000000-0000-4000-8000-000000000003",
+      "name": "Add Gmail / Telegram / Sheets here",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Summarize event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize event": {
+      "main": [
+        [
+          {
+            "node": "Add Gmail / Telegram / Sheets here",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}
